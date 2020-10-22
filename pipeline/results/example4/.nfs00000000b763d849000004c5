@@ -1,0 +1,35 @@
+2020-10-04 09:53:11 INFO      started.
+2020-10-04 09:53:11 INFO     Inside create_sims function.
+2020-10-04 09:53:11 INFO     Writing conf files.
+2020-10-04 09:53:12 INFO     Wrote /groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/results/example4/_ideq.conf. Based on /groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/sparta_abc/sparta_conf_file_windows_template.conf
+2020-10-04 09:53:12 INFO     Wrote /groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/results/example4/_iddif.conf. Based on /groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/sparta_abc/sparta_conf_file_windows_template.conf
+2020-10-04 09:53:12 INFO     linux op system
+2020-10-04 09:53:12 INFO     ran /groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/sparta_abc_ideq, conf_path=/groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/results/example4/_ideq.conf
+2020-10-04 09:53:12 INFO     ran /groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/sparta_abc_iddif, conf_path=/groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/results/example4/_iddif.conf
+2020-10-04 09:53:12 INFO      simulations are done - finish stats 126,126.
+2020-10-04 09:53:12 INFO     started calc stats data_name
+2020-10-04 09:58:02 INFO      started.
+2020-10-04 09:58:02 INFO     Inside create_sims function.
+2020-10-04 09:58:02 INFO     Writing conf files.
+2020-10-04 09:58:02 INFO     Wrote /groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/results/example4/_ideq.conf. Based on /groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/sparta_abc/sparta_conf_file_windows_template.conf
+2020-10-04 09:58:02 INFO     Wrote /groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/results/example4/_iddif.conf. Based on /groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/sparta_abc/sparta_conf_file_windows_template.conf
+2020-10-04 09:58:02 INFO     linux op system
+2020-10-04 10:06:40 INFO     ran /groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/sparta_abc_ideq, conf_path=/groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/results/example4/_ideq.conf
+2020-10-04 10:16:51 INFO     ran /groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/sparta_abc_iddif, conf_path=/groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/results/example4/_iddif.conf
+2020-10-04 10:16:51 INFO      simulations are done - finish stats 0,0.
+2020-10-04 10:16:51 INFO     started calc stats data_name
+2020-10-04 10:16:54 INFO     ran load_lib_data data_name
+2020-10-04 10:16:54 INFO     ran calc_bayes_factor data_name
+2020-10-04 10:16:54 INFO     done bayes class data_name
+2020-10-04 10:16:54 INFO     done ABC mean data_name
+2020-10-04 10:17:20 INFO     done ABC ridge data_name
+2020-10-04 10:19:07 DEBUG    locator: <matplotlib.colorbar._ColorbarAutoLocator object at 0x7fb96b56a2b0>
+2020-10-04 10:19:07 DEBUG    Using auto colorbar locator on colorbar
+2020-10-04 10:19:07 DEBUG    locator: <matplotlib.colorbar._ColorbarAutoLocator object at 0x7fb96b56a2b0>
+2020-10-04 10:19:07 DEBUG    Setting pcolormesh
+2020-10-04 10:19:07 DEBUG    findfont: Matching :family=sans-serif:style=normal:variant=normal:weight=normal:stretch=normal:size=10.0 to DejaVu Sans ('/groups/pupko/modules/python-anaconda3.6.5/lib/python3.6/site-packages/matplotlib/mpl-data/fonts/ttf/DejaVuSans.ttf') with score of 0.050000.
+2020-10-04 10:19:07 DEBUG    update_title_pos
+2020-10-04 10:19:07 DEBUG    findfont: Matching :family=sans-serif:style=normal:variant=normal:weight=normal:stretch=normal:size=12.0 to DejaVu Sans ('/groups/pupko/modules/python-anaconda3.6.5/lib/python3.6/site-packages/matplotlib/mpl-data/fonts/ttf/DejaVuSans.ttf') with score of 0.050000.
+2020-10-04 10:19:07 DEBUG    update_title_pos
+2020-10-04 10:20:30 INFO     done nn class. and reg. data_name
+2020-10-04 10:20:30 INFO     Done data_name. Res file written to /groups/pupko/gilloe/spartaABC/code/abc_nn/pipeline/results/example4/data_name_res.csv
