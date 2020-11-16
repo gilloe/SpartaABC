@@ -209,42 +209,36 @@ def verify_results_validity(stats, df, ai_field_name, ir_field_name, rl_field_na
                             dr_field_name, ad_field_name, minIR, maxIR,
                             minAI, maxAI, msa_path):
 
-    non_lasso_flags = set()
-    if not minIR <= stats['IR'] <= maxIR:
-        ir_field_name = 'm' + ir_field_name[1:]  # l_eq_IR -> m_eq_IR / l_dif_IR -> m_dif_IR
-        stats['IR'] = df[ir_field_name].values[0]
-        non_lasso_flags.add('IR')
-
-    if not minAI <= stats['AI'] <= maxAI:
-        ai_field_name = 'm' + ai_field_name[1:]  # l_eq_AIR -> m_eq_AIR / l_dif_AIR -> m_dif_AIR
-        stats['AI'] = df[ai_field_name].values[0]
-        non_lasso_flags.add('AI')
-        logger.info(type(stats['AI']))  # TODO
-        print(type(df[ai_field_name].values[0]))
-        print(type(str(df[ai_field_name].values[0])))
-        # stats['AI'] = str(df[ai_field_name].values[0]) + " (the mean is used instead of Lasso regression's inference)"
+    is_lasso = True
 
     logger.info('Calculating legal RL range...')
     minRL, maxRL = get_RL_bounds(msa_path)
     logger.info(f'minRL={minRL}, maxRL={maxRL}')
 
-    if not minRL <= stats['RL'] <= maxRL:
+    if (not minIR <= stats['IR'] <= maxIR) \
+        or (not minAI <= stats['AI'] <= maxAI) \
+        or (not minRL <= stats['RL'] <= maxRL)\
+        or (stats['model'] == 'dif'
+            and (not minIR <= stats['DR'] <= maxIR
+                 or not minAI <= stats['AD'] <= maxAI)):
+        is_lasso = False
+        ir_field_name = 'm' + ir_field_name[1:]  # l_eq_IR -> m_eq_IR / l_dif_IR -> m_dif_IR
+        stats['IR'] = df[ir_field_name].values[0]
+
+        ai_field_name = 'm' + ai_field_name[1:]  # l_eq_AIR -> m_eq_AIR / l_dif_AIR -> m_dif_AIR
+        stats['AI'] = df[ai_field_name].values[0]
+
         rl_field_name = 'm' + rl_field_name[1:]  # l_eq_RL -> m_eq_RL
         stats['RL'] = df[rl_field_name].values[0]
-        non_lasso_flags.add('RL')
 
-    if stats['model'] == 'dif':  # RIM model, i.e., dr_field_name and ad_field_name are not None
-        if not minIR <= stats['DR'] <= maxIR:
+        if stats['model'] == 'dif':
             dr_field_name = 'm' + dr_field_name[1:]  # l_dif_DR -> m_dif_DR
             stats['DR'] = df[dr_field_name].values[0]
-            non_lasso_flags.add('DR')
 
-        if not minAI <= stats['AD'] <= maxAI:
             ad_field_name = 'm' + ad_field_name[1:]  # l_dif_AD -> m_dif_AD
             stats['AD'] = df[ad_field_name].values[0]
-            non_lasso_flags.add('AD')
 
-    return non_lasso_flags
+    return is_lasso
 
 
 def get_stats(results_file_path, minIR, maxIR, minAI, maxAI, msa_path, chosen_model_field_name='nn_c_class', rl_template='l_@@@_RL',
@@ -270,12 +264,11 @@ def get_stats(results_file_path, minIR, maxIR, minAI, maxAI, msa_path, chosen_mo
                       'AD': df[ad_field_name].values[0]})
 
     logger.info(f'Results BEFORE verification:\n{stats}')
-    non_lasso_flags_set = verify_results_validity(stats, df, ai_field_name, ir_field_name, rl_field_name,
-                                                  dr_field_name, ad_field_name, minIR, maxIR, minAI, maxAI,
-                                                  msa_path)
+    is_lasso = verify_results_validity(stats, df, ai_field_name, ir_field_name, rl_field_name,
+                                    dr_field_name, ad_field_name, minIR, maxIR, minAI, maxAI, msa_path)
     logger.info(f'Results AFTER verification:\n{stats}')
 
-    return stats, non_lasso_flags_set
+    return stats, is_lasso
 
 
 def edit_success_html(CONSTS, html_path, results_file_path, minIR, maxIR, minAI, maxAI, msa_path):
@@ -283,28 +276,28 @@ def edit_success_html(CONSTS, html_path, results_file_path, minIR, maxIR, minAI,
     update_html(html_path, 'RUNNING', 'FINISHED')
 
     logger.info('Getting stats...')
-    param2values, non_lasso_flags_set = get_stats(results_file_path, minIR, maxIR, minAI, maxAI, msa_path)
-    non_lasso_txt = '*'
+    param2values, is_lasso = get_stats(results_file_path, minIR, maxIR, minAI, maxAI, msa_path)
+    non_lasso_txt = "<font color='red'>*</font>"
 
     additional_params = ''
     if 'DR' in param2values:
-        additional_params += f'''<b>DR</b>: <font color='red'>{param2values['DR']:.4f}</font>{non_lasso_txt if 'DR' in non_lasso_flags_set else ''}<br>
-                                <b>AD</b>: <font color='red'>{param2values['AD']:.2f}</font>{non_lasso_txt if 'AD' in non_lasso_flags_set else ''}<br>'''
+        additional_params += f'''<b>R_D</b>: <font color='red'>{param2values['DR']:.4f}</font><br>
+                                <b>A_D</b>: <font color='red'>{param2values['AD']:.2f}</font><br>'''
     logger.info('Appending to html...')
     append_to_html(html_path, f'''
             <div class="container" style="{CONSTS.CONTAINER_STYLE}">
             <h3><b>
-            Best parameters found are as follows:</a>
+            Best parameters found{non_lasso_txt if not is_lasso else ''} are as follows:</a>
             </b></h3>
             <br>
             <p>
                 <b>Model:</b> {'SIM' if param2values['model'] == 'eq' else 'RIM'}<br>
-                <b>RL:</b> <font color='red'>{int(param2values['RL']+0.5)}</font>{non_lasso_txt if 'RL' in non_lasso_flags_set else ''}<br>
-                <b>IR:</b> <font color='red'>{param2values['IR']:.4f}</font>{non_lasso_txt if 'IR' in non_lasso_flags_set else ''}<br>
-                <b>AI:</b> <font color='red'>{param2values['AI']:.2f}</font>{non_lasso_txt if 'AI' in non_lasso_flags_set else ''}<br>
+                <b>RL:</b> <font color='red'>{int(param2values['RL']+0.5)}</font><br>
+                <b>{'R_ID' if param2values['model'] == 'eq' else 'R_I'}:</b> <font color='red'>{2*param2values['IR'] if param2values['model'] == 'eq' else param2values['IR']:.4f}</font><br>
+                <b>{'A_ID' if param2values['model'] == 'eq' else 'A_I'}:</b> <font color='red'>{param2values['AI']:.2f}</font><br>
                 {additional_params}
             </p>
-            {non_lasso_txt+'Mean value is used instead of lasso regression (lasso inferred value is out of prior).' if non_lasso_flags_set else ''}
+            {non_lasso_txt+'Mean value is used instead of lasso regression (lasso inferred value is out of prior).' if not is_lasso else ''}
             </div>
 ''')
 
