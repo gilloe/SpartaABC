@@ -105,8 +105,8 @@ def peek_form(cgi_debug_path_f, form):
     cgi_debug_path_f.flush()
 
 
-def append_running_parameters_to_html(html_path, msa_name, tree_name, minIR, maxIR,
-                                      msa_is_provided_as_text, tree_is_provided_as_text, job_title):
+def append_running_parameters_to_html(html_path, msa_name, tree_name, mode, substitution_model, maxIR,
+                                      msa_is_provided_as_text, tree_is_provided_as_text, job_title, additional_parameters):
 
     content = f'<div class="container" style="{CONSTS.CONTAINER_STYLE}">\n'
 
@@ -124,11 +124,21 @@ def append_running_parameters_to_html(html_path, msa_name, tree_name, minIR, max
     content += '</div></div>\n'
 
     content += '<div class="row" style="font-size: 20px;"><div class="col-md-12">\n'
-    content += f'<b>Min IR:</b> {minIR}\n'
+    content += f'<b>Sequence type:</b> {"DNA" if mode=="nuc" else "AA"}\n'
     content += '</div></div>\n'
 
     content += '<div class="row" style="font-size: 20px;"><div class="col-md-12">\n'
-    content += f'<b>Max IR:</b> {maxIR}\n'
+    content += f'<b>Substitution model:</b> {substitution_model}\n'
+    content += '</div></div>\n'
+
+    if substitution_model == 'GTR':
+        for key in additional_parameters:
+            content += '<div class="row" style="font-size: 20px;"><div class="col-md-12">\n'
+            content += f'<b>{key}:</b> {additional_parameters[key]}\n'
+            content += '</div></div>\n'
+
+    content += '<div class="row" style="font-size: 20px;"><div class="col-md-12">\n'
+    content += f'<b>Max indel rate:</b> {maxIR}\n'
     content += '</div></div>\n'
 
     content += '</div><br>\n'
@@ -145,7 +155,7 @@ def write_cmds_file(cmds_file, parameters, run_number):
     with open(cmds_file, 'w') as f:
         f.write(f'module load {required_modules_as_str};')
         f.write(new_line_delimiter)
-        f.write(f'python {CONSTS.MAIN_SCRIPT} {parameters}\t{CONSTS.WEBSERVER_NAME}_{run_number}')
+        f.write(f'python {CONSTS.WEBSERVER_WRAPPER} {parameters}\t{CONSTS.WEBSERVER_NAME}_{run_number}')
         f.write('\n')
 
 
@@ -195,8 +205,8 @@ def run_cgi():
 
     # random_chars = "".join(choice(string.ascii_letters + string.digits) for x in range(20))
     # adding 20 random digits to prevent users guess a number and see data that are not their's
-    run_number = str(round(time())) + str(randint(10 ** 19, 10 ** 20 - 1))
-    run_number = str(randint(0, 10**4-1))
+    run_number = str(round(time())) + str(randint(10 ** 9, 10 ** 10 - 1))
+    # run_number = str(randint(10000, 10**5-1))
     # if form['example_page'].value == 'yes':
     #     run_number = 'example'
 
@@ -247,9 +257,17 @@ def run_cgi():
         if form['job_title'].value != '':
             job_title = form['job_title'].value.strip()
 
-        minIR = 0
-        if 'IR_min_user_val' in form and form['IR_min_user_val'].value != '':
-            minIR = float(form['IR_min_user_val'].value.strip())
+        # minIR = 0
+        # if 'IR_min_user_val' in form and form['IR_min_user_val'].value != '':
+        #     minIR = float(form['IR_min_user_val'].value.strip())
+
+        mode = 'nuc'
+        if 'SeqType' in form and form['SeqType'].value != '':
+            mode = form['SeqType'].value.strip()
+
+        substitution_model = 'nuc'
+        if 'SubType' in form and form['SubType'].value != '':
+            substitution_model = form['SubType'].value.strip().upper()
 
         maxIR = 0.05
         if form['IR_max_user_val'].value != '':
@@ -278,16 +296,59 @@ def run_cgi():
 
         write_to_debug_file(cgi_debug_path_f, f'ls of {wd} yields:\n{os.listdir(wd)}\n')
 
+        write_to_debug_file(cgi_debug_path_f, f'Extracting running parameters...\n')
+
+        parameters = f'{msa_path} {tree_path} {mode} {substitution_model} {maxIR} {wd} --html_path {html_path}'
+
+        additional_parameters = {}
+        if substitution_model == 'GTR':
+            freqs = []
+            if form['freq_a'].value != '':
+                freqs.append(form['freq_a'].value.strip())
+            if form['freq_c'].value != '':
+                freqs.append(form['freq_c'].value.strip())
+            if form['freq_g'].value != '':
+                freqs.append(form['freq_g'].value.strip())
+            freqs.append(str(1-(sum(float(x) for x in freqs))))
+            assert len(freqs) == 4, 'Not enough frequencies!'
+            parameters += f' --freqs {",".join(freqs)}'
+            additional_parameters['Nucleotide frequencies'] = ' ; '.join(f'{x}={float(y):.4f}' for x,y in zip('ACGT', freqs))
+
+            rates = []
+            if form['rate_a'].value != '':
+                rates.append(form['rate_a'].value.strip())
+            if form['rate_b'].value != '':
+                rates.append(form['rate_b'].value.strip())
+            if form['rate_c'].value != '':
+                rates.append(form['rate_c'].value.strip())
+            if form['rate_d'].value != '':
+                rates.append(form['rate_d'].value.strip())
+            if form['rate_e'].value != '':
+                rates.append(form['rate_e'].value.strip())
+            assert len(rates) == 5, 'Not enough rates!'
+            parameters += f' --rates {",".join(rates)}'
+            additional_parameters['Rate parameters'] = ' ; '.join(f'{x}={float(y):.4f}' for x,y in zip('abcde', rates))
+
+            inv_prop = form['param_i'].value.strip()
+            parameters += f' --inv-prop {inv_prop}'
+            additional_parameters['Invariable sites proportion'] = inv_prop
+
+            gamma_shape = form['param_g'].value.rstrip()
+            parameters += f' --gamma-shape {gamma_shape}'
+            additional_parameters['Gamma distribution shape'] = gamma_shape
+
+            gamma_cats = form['param_cat'].value.strip()
+            parameters += f' --gamma-cats {gamma_cats}'
+            additional_parameters['# of discrete gamma categories'] = gamma_cats
+
+
         write_to_debug_file(cgi_debug_path_f, f'{ctime()}: Writing running parameters to html...\n')
 
         if not page_is_ready:
-            append_running_parameters_to_html(html_path, msa_name, tree_name, minIR, maxIR,
-                                              msa_is_provided_as_text, tree_is_provided_as_text, job_title)
+            append_running_parameters_to_html(html_path, msa_name, tree_name, mode, substitution_model, maxIR,
+                                              msa_is_provided_as_text, tree_is_provided_as_text, job_title, additional_parameters)
 
         write_to_debug_file(cgi_debug_path_f, f'{ctime()}: Running parameters were written to html successfully.\n')
-
-        parameters = f'{msa_path} {tree_path} {wd} {minIR} {maxIR} --html_path {html_path}'
-
         cmds_file = os.path.join(wd, 'qsub.cmds')
         write_cmds_file(cmds_file, parameters, run_number)
 
@@ -334,6 +395,13 @@ def run_cgi():
         write_to_debug_file(cgi_debug_path_f, f'\n\n{"#" * 50}\nCGI finished running!\n{"#" * 50}\n')
 
         cgi_debug_path_f.close()
+
+        send_email(smtp_server=CONSTS.SMTP_SERVER,
+                   sender=CONSTS.ADMIN_EMAIL,
+                   receiver=f'{CONSTS.OWNER_EMAIL}',
+                   subject=f'{CONSTS.WEBSERVER_NAME.upper()} job {run_number} by {email} has been failed!',
+                   content=f"{email}\n\n{os.path.join(CONSTS.WEBSERVER_URL, 'results', run_number, CONSTS.RESULT_WEBPAGE_NAME)}\n"
+                   f"\n{os.path.join(CONSTS.WEBSERVER_URL, 'results', run_number, 'cgi_debug.txt')}")
 
     except Exception as e:
 
