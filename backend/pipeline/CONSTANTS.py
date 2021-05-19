@@ -10,7 +10,7 @@ import os
 ADMIN_EMAIL = 'TAU BioSequence <bioSequence@tauex.tau.ac.il>'
 SMTP_SERVER = 'mxout.tau.ac.il'
 
-OWNER_EMAIL = 'orenavram@gmail.com'
+OWNER_EMAIL = 'gilloe@tauex.tau.ac.il'
 
 # general variables
 SERVERS_RESULTS_DIR = '/bioseq/data/results'
@@ -30,13 +30,14 @@ WEBSERVER_HTML_DIR = f'/data/www/html/{WEBSERVER_NAME}'
 WEBSERVER_RESULTS_URL = os.path.join(WEBSERVER_URL, 'results')
 
 Q_SUBMITTER_SCRIPT = '/bioseq/bioSequence_scripts_and_constants/q_submitter_power.py'
-MAIN_SCRIPT = f'/bioseq/{WEBSERVER_NAME}/{WEBSERVER_NAME}_webserver.py'
-REQUIRED_MODULES = ['python/python-anaconda3.6.5-orenavr2']
+WEBSERVER_WRAPPER = f'/bioseq/{WEBSERVER_NAME}/{WEBSERVER_NAME}_webserver.py'
+REQUIRED_MODULES = ['python/python-anaconda3.6.5-orenavr2', 'mafft/7.419', 'INDELible/INDELible-1.03']
+MAIN_SCRIPT = '/bioseq/spartaabc/pipeline/pipeline_click.py'
 
 SUBMISSIONS_LOG = f'/bioseq/{WEBSERVER_NAME}/submissions_log.txt'
 OUTPUT_DIR_NAME = 'outputs'
 RESULT_WEBPAGE_NAME = 'result.html'
-RESULT_CSV_NAME = 'data_name_res.csv'
+RESULT_CSV_NAME = 'sum_res.csv'
 EMAIL_FILE_NAME = 'email.txt'
 
 # path to example data
