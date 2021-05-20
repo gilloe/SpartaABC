@@ -1,22 +1,26 @@
 # from Bio import Phylo
 import logging
 
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('main')
 
 
 def get_tree_labels(tree_to_prune_path):
+    from Bio import Phylo
     i = 0
     logger.info(f'Extracting leaf labels from {tree_to_prune_path}')
     while True:
         i += 1
         logger.info(f'Iteration #{i}')
-        if i > 100:
-            logger.info(f'Failed 100 times to extract leaf labels from {tree_to_prune_path}!')
-            raise AssertionError(f'Failed 100 times to extract leaf labels from {tree_to_prune_path}!')
+        if i > 10:
+            logger.error('#'*80)
+            logger.error(f'Tree and MSA consistency can not be verified!!')
+            logger.error(f'Failed 10 times to extract leaf labels from {tree_to_prune_path}!')
+            logger.error('#'*80)
         try:
             tree = Phylo.read(tree_to_prune_path, 'newick')
-            result = [leaf.name for leaf in tree.get_terminals()]
+            result = set(leaf.name for leaf in tree.get_terminals())
             break
         except:
             pass

@@ -13,13 +13,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('main')
 
 
-def verify_fasta_format(fasta_path):
+def verify_fasta_format(fasta_path, sequence_type):
     logger.info('Validating FASTA format')
-    Bio.SeqUtils.IUPACData.ambiguous_dna_letters += 'U-'
-    legal_chars = set(Bio.SeqUtils.IUPACData.ambiguous_dna_letters.lower() +
-                      Bio.SeqUtils.IUPACData.ambiguous_dna_letters +
-                      Bio.SeqUtils.IUPACData.protein_letters.lower() +
-                      Bio.SeqUtils.IUPACData.protein_letters)
+    legal_chars = set(Bio.SeqUtils.IUPACData.ambiguous_dna_letters+'U' if sequence_type == 'nuc'
+                      else Bio.SeqUtils.IUPACData.protein_letters)
+    legal_chars.add('-')
     with open(fasta_path) as f:
         line_number = 0
         try:
@@ -49,8 +47,8 @@ def verify_fasta_format(fasta_path):
                 else:  # not a header
                     previous_line_was_header = False
                     for c in line:
-                        if c not in legal_chars:
-                            return f'Illegal <a href="https://www.ncbi.nlm.nih.gov/blast/fasta.shtml" target="_blank">FASTA format</a>. Line {line_number} in MSA contains illegal DNA character "{c}".'
+                        if c.upper() not in legal_chars:
+                            return f'Illegal content detected in <a href="https://www.ncbi.nlm.nih.gov/blast/fasta.shtml" target="_blank">FASTA</a> file. Line {line_number} in MSA contains illegal {"DNA" if sequence_type == "nuc" else "amino acid"} character "{c}".'
                     curated_content += f'{line}\n'
         except UnicodeDecodeError as e:
             logger.info(e.args)
@@ -70,11 +68,8 @@ def verify_newick_format(tree_path):
 
 def verify_msa_is_consistent_with_tree(msa_path, tree_path):
     logger.info('Validating MSA is consistent with the species tree')
-    logger.info('TODO!!')
-    return
     tree_strains = get_tree_labels(tree_path)
     logger.info(f'Phylogenetic tree contains the following strains:\n{tree_strains}')
-
     with open(msa_path) as f:
         logger.info(f'Checking MSA...')
         for line in f:
@@ -83,19 +78,27 @@ def verify_msa_is_consistent_with_tree(msa_path, tree_path):
                 strain = line.lstrip('>').rstrip('\n')
                 logger.debug(f'Checking {strain}...')
                 if strain not in tree_strains:
-                    msg = f'{strain} species appears in the input MSA but not in the phylogenetic tree. ' \
-                        f'Please make sure the phylogenetic tree you provide contains (at least) all ' \
-                        f'the species in the provided MSA.'
+                    msg = f'{strain} species appears in the input MSA but not in the phylogenetic tree. Please make ' \
+                        f'sure the phylogenetic tree you provide contains all the species in the provided ' \
+                        f'MSA. and re-submit your job'
                     logger.error(msg)
                     return msg
                 else:
                     logger.info(f'{strain} appears in tree!')
+                    tree_strains.remove(strain)
+
+    if tree_strains:
+        msg = f'There is one (or more) species that appears in the input tree but not in the MSA ' \
+            f'(e.g., {tree_strains.pop()}). Please make sure the phylogenetic tree you provide does ' \
+            f'not contain irrelevant species and re-submit your job.'
+        logger.error(msg)
+        return msg
 
 
-def validate_input(msa_path, tree_path, error_path):
+def validate_input(msa_path, sequence_type, tree_path, error_path):
     logger.info('Validating input...')
 
-    error_msg = verify_fasta_format(msa_path)
+    error_msg = verify_fasta_format(msa_path, sequence_type)
     if error_msg:
         fail(error_msg, error_path)
 
@@ -120,7 +123,7 @@ def fix_input(msa_path, tree_path, output_dir, tmp_dir):
     return fixed_msa_path, adjusted_tree
 
 
-def main(msa_path, tree_path, mode, submodel, freqs, rates, inv_prop,
+def main(msa_path, tree_path, sequence_type, submodel, freqs, rates, inv_prop,
          gamma_shape, gamma_cats, maxIR, output_dir_path, html_path):
 
     error_path = f'{output_dir_path}/error.txt'
@@ -134,7 +137,7 @@ def main(msa_path, tree_path, mode, submodel, freqs, rates, inv_prop,
         tmp_dir = f'{os.path.split(msa_path)[0]}/tmp'  # same folder as the input msa
         os.makedirs(tmp_dir, exist_ok=True)
 
-        validate_input(msa_path, tree_path, error_path, mode)
+        validate_input(msa_path, sequence_type, tree_path, error_path)
 
         results_file_path = os.path.join(output_dir_path, CONSTS.RESULT_CSV_NAME)
         print(results_file_path)
@@ -142,7 +145,7 @@ def main(msa_path, tree_path, mode, submodel, freqs, rates, inv_prop,
             msa_name = os.path.split(msa_path)[-1]
             tree_name = os.path.split(tree_path)[-1]
             cmd = f"python {CONSTS.MAIN_SCRIPT} --path {output_dir_path}/" \
-                f" --msaf {msa_name} --trf {tree_name} --mode {mode}" \
+                f" --msaf {msa_name} --trf {tree_name} --mode {sequence_type}" \
                 f" --submodel {submodel} --maxr {maxIR}"
             if submodel == 'GTR':
                 cmd += f' --freq {" ".join(freqs)}'
