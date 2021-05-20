@@ -6,6 +6,7 @@ import Bio.SeqUtils
 import pandas as pd
 from time import sleep
 import CONSTANTS as CONSTS  # from /bioseq/sincopa/
+from newick_validator import is_newick
 from auxiliaries import *
 
 logging.basicConfig(level=logging.INFO)
@@ -62,16 +63,15 @@ def verify_fasta_format(fasta_path):
 
 def verify_newick_format(tree_path):
     logger.info('Validating NEWICK format')
-    # TODO
-    pass
+    with open(tree_path) as f:
+        if not is_newick(f.read()):
+            return 'Invalid newick format.'
 
 
 def verify_msa_is_consistent_with_tree(msa_path, tree_path):
     logger.info('Validating MSA is consistent with the species tree')
     logger.info('TODO!!')
     return
-    logger.info('Validating MSA is consistent with the species tree')
-
     tree_strains = get_tree_labels(tree_path)
     logger.info(f'Phylogenetic tree contains the following strains:\n{tree_strains}')
 
@@ -120,184 +120,129 @@ def fix_input(msa_path, tree_path, output_dir, tmp_dir):
     return fixed_msa_path, adjusted_tree
 
 
-def main(msa_path, tree_path, minIR, maxIR, minAI, maxAI, output_dir_path, html_path):
+def main(msa_path, tree_path, mode, submodel, freqs, rates, inv_prop,
+         gamma_shape, gamma_cats, maxIR, output_dir_path, html_path):
 
     error_path = f'{output_dir_path}/error.txt'
-    if html_path:
-        run_number = initialize_html(CONSTS, output_dir_path, html_path)
-        final_zip_path = f'{os.path.split(output_dir_path)[0]}/{CONSTS.WEBSERVER_NAME}_{run_number}'
+    try:
+        if html_path:
+            run_number = initialize_html(CONSTS, output_dir_path, html_path)
+            # final_zip_path = f'{os.path.split(output_dir_path)[0]}/{CONSTS.WEBSERVER_NAME}_{run_number}'
+
+        os.makedirs(output_dir_path, exist_ok=True)
+
+        tmp_dir = f'{os.path.split(msa_path)[0]}/tmp'  # same folder as the input msa
+        os.makedirs(tmp_dir, exist_ok=True)
+
+        validate_input(msa_path, tree_path, error_path, mode)
+
+        results_file_path = os.path.join(output_dir_path, CONSTS.RESULT_CSV_NAME)
+        print(results_file_path)
+        if not os.path.exists(results_file_path):
+            msa_name = os.path.split(msa_path)[-1]
+            tree_name = os.path.split(tree_path)[-1]
+            cmd = f"python {CONSTS.MAIN_SCRIPT} --path {output_dir_path}/" \
+                f" --msaf {msa_name} --trf {tree_name} --mode {mode}" \
+                f" --submodel {submodel} --maxr {maxIR}"
+            if submodel == 'GTR':
+                cmd += f' --freq {" ".join(freqs)}'
+                cmd += f' --rates {" ".join(rates)}'
+                cmd += f' --inv-prop {inv_prop}'
+                cmd += f' --gamma-shape {gamma_shape}'
+                cmd += f' --gamma-cats {gamma_cats}'
+            logger.info(f'''Calling:\n{cmd}\n\n''')
+            os.system(cmd)
+            sleep(CONSTS.RELOAD_INTERVAL)
+        else:
+            logger.info('\n'+'#'*50+f'\nSkipping SpartaABC analysis!\nResults exist at:\n{results_file_path}\n'+'#'*50)
+        assert os.path.exists(results_file_path), \
+            f'SpartaABC run was finished but due to unknown reason. The result file can not be found :-('
+
+        if html_path:
+            # shutil.make_archive(final_zip_path, 'zip', output_dir_path)
+            finalize_html(html_path, error_path, run_number, CONSTS, results_file_path)
+
+    except Exception as e:
+        logger.info(f'SUCCEEDED = False')
+        if html_path:
+            error_msg = e.args[-1]
+            if os.path.exists(error_path):  # in case any internal module crashed
+                with open(error_path) as f:
+                    error_msg = f.read()
+            edit_failure_html(CONSTS, f'{error_msg}', html_path, run_number)
+            add_closing_html_tags(html_path, CONSTS, run_number)
 
 
-    os.makedirs(output_dir_path, exist_ok=True)
-
-    tmp_dir = f'{os.path.split(msa_path)[0]}/tmp'  # same folder as the input msa
-    os.makedirs(tmp_dir, exist_ok=True)
-
-    validate_input(msa_path, tree_path, error_path)
-
-    results_file_path = os.path.join(output_dir_path, CONSTS.RESULT_CSV_NAME)
-    if not os.path.exists(results_file_path):
-        sys.path.insert(0, '/bioseq/spartaabc/pipeline')
-        from pipeline import pipeline
-        msa_name = os.path.split(args.input_msa_path)[-1]
-        tree_name = os.path.split(args.input_tree_path)[-1]
-        logger.error(f'''Calling:\npipeline('{output_dir_path}/', '{msa_name}', '{tree_name}', {minIR}, {maxIR})\n\n''')
-        pipeline(output_dir_path+'/', msa_name, tree_name, minIR=minIR, maxIR=maxIR)
-        sleep(CONSTS.RELOAD_INTERVAL)
-    else:
-        logger.error('#'*50+f'\nSkipping SpartaABC analysis!\nResults exist at: {results_file_path}\n'+'#'*50)
-    assert os.path.exists(results_file_path), \
-        f'SpartaABC run was finished but due to unknown reason the results file can not be found :-('
-
-    if html_path:
-        # shutil.make_archive(final_zip_path, 'zip', output_dir_path)
-        finalize_html(html_path, error_path, run_number, CONSTS, results_file_path, minIR, maxIR, minAI, maxAI, msa_path)
-
-    # except Exception as e:
-    #     logger.info(f'SUCCEEDED = False')
-    #     if html_path:
-    #         error_msg = e.args[-1]
-    #         if os.path.exists(error_path):  # in case any internal module crashed
-    #             with open(error_path) as f:
-    #                 error_msg = f.read()
-    #         edit_failure_html(CONSTS, f'{error_msg}\n{sys.version}', html_path, run_number)
-    #         add_closing_html_tags(html_path, CONSTS, run_number)
-
-
-def get_RL_bounds(msa_path, min_normalized_factor=0.8, max_normalized_factor=1.1):
-    minIR = float('inf')
-    maxIR = -float('inf')
-
-    with open(msa_path) as f:
-        f.readline()  # skip first header
-        sequence = ''
-        for line in f:
-            line = line.rstrip()
-            if not line.startswith('>'):
-                sequence += line.rstrip()  # accumulate sequence
-            else:
-                # a new header was found
-                seq_length = len(sequence.replace('-', ''))
-                sequence = ''
-                if seq_length < minIR:
-                    minIR = seq_length
-                if seq_length > maxIR:
-                    maxIR = seq_length
-
-    # don't forget last record!!
-    if sequence != '':
-        seq_length = len(sequence.replace('-', ''))
-        if seq_length < minIR:
-            minIR = seq_length
-        if seq_length > maxIR:
-            maxIR = seq_length
-
-    return minIR * min_normalized_factor, maxIR * max_normalized_factor
-
-
-def finalize_html(html_path, error_path, run_number, CONSTS, results_file_path, minIR, maxIR, minAI, maxAI, msa_path):
+def finalize_html(html_path, error_path, run_number, CONSTS, results_file_path):
     succeeded = not os.path.exists(error_path)
     logger.info(f'SUCCEEDED = {succeeded}')
     if succeeded:
-        edit_success_html(CONSTS, html_path, results_file_path, minIR, maxIR, minAI, maxAI, msa_path)
+        edit_success_html(CONSTS, html_path, results_file_path)
     else:
         edit_failure_html(CONSTS, error_path, html_path, run_number)
     add_closing_html_tags(html_path, CONSTS, run_number)
 
 
-def verify_results_validity(stats, df, ai_field_name, ir_field_name, rl_field_name,
-                            dr_field_name, ad_field_name, minIR, maxIR,
-                            minAI, maxAI, msa_path):
+def get_stats(results_file_path):
 
-    is_lasso = True
+    ''' example results file:
+    RIM A_D,1.5554392000000004
+    RIM A_I,1.5710081
+    RIM RL,77.33
+    RIM R_D,0.030431140000000006
+    RIM R_I,0.031627869999999995
+    SIM A_ID,1.5909845000000005
+    SIM RL,82.99
+    SIM R_ID,0.07235858
+    chosen model,SIM
+    '''
+    with open(results_file_path) as f:
+        model = None
+        for line in f:
+            tokens = line.rstrip().split(',')
+            if tokens[-1].isalpha():
+                model = tokens[-1]
+        assert model, 'No model was found in results file!'
 
-    logger.info('Calculating legal RL range...')
-    minRL, maxRL = get_RL_bounds(msa_path)
-    logger.info(f'minRL={minRL}, maxRL={maxRL}')
+    stats = {'model': model}
+    with open(results_file_path) as f:
+        for line in f:
+            tokens = line.rstrip().split(' ')
+            if model in tokens[0]:
+                key, value = tokens[-1].split(',')
+                stats[key] = float(value)
 
-    if (not minIR <= stats['IR'] <= maxIR) \
-        or (not minAI <= stats['AI'] <= maxAI) \
-        or (not minRL <= stats['RL'] <= maxRL)\
-        or (stats['model'] == 'dif'
-            and (not minIR <= stats['DR'] <= maxIR
-                 or not minAI <= stats['AD'] <= maxAI)):
-        is_lasso = False
-        ir_field_name = 'm' + ir_field_name[1:]  # l_eq_IR -> m_eq_IR / l_dif_IR -> m_dif_IR
-        stats['IR'] = df[ir_field_name].values[0]
-
-        ai_field_name = 'm' + ai_field_name[1:]  # l_eq_AIR -> m_eq_AIR / l_dif_AIR -> m_dif_AIR
-        stats['AI'] = df[ai_field_name].values[0]
-
-        rl_field_name = 'm' + rl_field_name[1:]  # l_eq_RL -> m_eq_RL
-        stats['RL'] = df[rl_field_name].values[0]
-
-        if stats['model'] == 'dif':
-            dr_field_name = 'm' + dr_field_name[1:]  # l_dif_DR -> m_dif_DR
-            stats['DR'] = df[dr_field_name].values[0]
-
-            ad_field_name = 'm' + ad_field_name[1:]  # l_dif_AD -> m_dif_AD
-            stats['AD'] = df[ad_field_name].values[0]
-
-    return is_lasso
+    logger.info(stats)
+    return stats
 
 
-def get_stats(results_file_path, minIR, maxIR, minAI, maxAI, msa_path, chosen_model_field_name='nn_c_class', rl_template='l_@@@_RL',
-              ir_template='l_@@@_IR', ai_template='l_@@@_AIR', dr='l_@@@_DR', ad='l_@@@_ADR'):
-
-    df = pd.read_csv(results_file_path)
-
-    chosen_model = df[chosen_model_field_name].values[0]  # either 'eq' for SIM or 'dif' for RIM
-    stats = {'model': chosen_model}  # add model name
-
-    rl_field_name = rl_template.replace('@@@', df[chosen_model_field_name].values[0])
-    ir_field_name = ir_template.replace('@@@', df[chosen_model_field_name].values[0])
-    ai_field_name = ai_template.replace('@@@', df[chosen_model_field_name].values[0])
-    stats.update({'RL': df[rl_field_name].values[0],
-                  'IR': df[ir_field_name].values[0],
-                  'AI': df[ai_field_name].values[0]})
-
-    dr_field_name = ad_field_name = None
-    if chosen_model == 'dif':  # RIM model
-        dr_field_name = dr.replace('@@@', df[chosen_model_field_name].values[0])
-        ad_field_name = ad.replace('@@@', df[chosen_model_field_name].values[0])
-        stats.update({'DR': df[dr_field_name].values[0],
-                      'AD': df[ad_field_name].values[0]})
-
-    logger.info(f'Results BEFORE verification:\n{stats}')
-    is_lasso = verify_results_validity(stats, df, ai_field_name, ir_field_name, rl_field_name,
-                                    dr_field_name, ad_field_name, minIR, maxIR, minAI, maxAI, msa_path)
-    logger.info(f'Results AFTER verification:\n{stats}')
-
-    return stats, is_lasso
 
 
-def edit_success_html(CONSTS, html_path, results_file_path, minIR, maxIR, minAI, maxAI, msa_path):
+def edit_success_html(CONSTS, html_path, results_file_path):
     logger.info('Updating html from "running" to "finished"...')
     update_html(html_path, 'RUNNING', 'FINISHED')
 
     logger.info('Getting stats...')
-    param2values, is_lasso = get_stats(results_file_path, minIR, maxIR, minAI, maxAI, msa_path)
-    non_lasso_txt = "<font color='red'>*</font>"
+    stats = get_stats(results_file_path)
 
     additional_params = ''
-    if 'DR' in param2values:
-        additional_params += f'''<b>R_D</b>: <font color='red'>{param2values['DR']:.4f}</font><br>
-                                <b>A_D</b>: <font color='red'>{param2values['AD']:.2f}</font><br>'''
+    if stats['model'] == 'RIM':
+        additional_params += f'''<b>R_D</b>: <font color='red'>{stats['R_D']:.4f}</font><br>
+                                <b>A_D</b>: <font color='red'>{stats['A_D']:.2f}</font><br>'''
     logger.info('Appending to html...')
     append_to_html(html_path, f'''
             <div class="container" style="{CONSTS.CONTAINER_STYLE}">
             <h3><b>
-            Best parameters found{non_lasso_txt if not is_lasso else ''} are as follows:</a>
+            Best configuration found is as follows:</a>
             </b></h3>
             <br>
             <p>
-                <b>Model:</b> {'SIM' if param2values['model'] == 'eq' else 'RIM'}<br>
-                <b>RL:</b> <font color='red'>{int(param2values['RL']+0.5)}</font><br>
-                <b>{'R_ID' if param2values['model'] == 'eq' else 'R_I'}:</b> <font color='red'>{2*param2values['IR'] if param2values['model'] == 'eq' else param2values['IR']:.4f}</font><br>
-                <b>{'A_ID' if param2values['model'] == 'eq' else 'A_I'}:</b> <font color='red'>{param2values['AI']:.2f}</font><br>
+                <b>Model:</b> <font color='red'>{stats['model']}</font><br>
+                <b>RL:</b> <font color='red'>{int(stats['RL']+0.5)}</font><br>
+                <b>{'R_ID' if stats['model'] == 'SIM' else 'R_I'}:</b> <font color='red'>{2*stats['R_ID'] if stats['model'] == 'SIM' else stats['R_I']:.4f}</font><br>
+                <b>{'A_ID' if stats['model'] == 'SIM' else 'A_I'}:</b> <font color='red'>{stats['A_ID'] if stats['model'] == 'SIM' else stats['A_I']:.4f}</font><br>
                 {additional_params}
             </p>
-            {non_lasso_txt+'Mean value is used instead of lasso regression (lasso inferred value is out of prior).' if not is_lasso else ''}
             </div>
 ''')
 
@@ -362,22 +307,27 @@ if __name__ == '__main__':
         import argparse
         parser = argparse.ArgumentParser()
         parser.add_argument('input_msa_path',
-                            help='A path to a DNA MSA file to infer indel parameters.',
+                            help='A path to an MSA file to infer indel parameters.',
                             type=lambda path: path if os.path.exists(path) else parser.error(f'{path} does not exist!'))
         parser.add_argument('input_tree_path',
                             help='A path to a background species tree that contains all the species in the input MSA.',
                             type=lambda path: path if os.path.exists(path) else parser.error(f'{path} does not exist!'))
+        parser.add_argument('mode', choices=['nuc', 'amino'],
+                            help='Type of sequences that will be simulated in Sparta')
+        parser.add_argument('submodel', choices=['JC', 'GTR'],
+                            help='Type of substitution model used for simulations')
+        parser.add_argument('maxIR', type=lambda x: float(x),
+                            help='Upper bound of the indel rate posterior.')
         parser.add_argument('output_dir_path',
                             help='A path to a folder in which the analysis results will be written.',
                             type=lambda path: path.rstrip('/'))
-        parser.add_argument('minIR', type=lambda x: float(x),
-                            help='Lower bound of the indel rate posterior.')
-        parser.add_argument('maxIR', type=lambda x: float(x),
-                            help='Upper bound of the indel rate posterior.')
-        parser.add_argument('--minAI', default=1.001, type=lambda x: float(x),
-                            help='Lower bound of the "a parameter" posterior.')
-        parser.add_argument('--maxAI', default=2, type=lambda x: float(x),
-                            help='Upper bound of the "a parameter" posterior.')
+        parser.add_argument('--freqs', default=None, type=lambda x: x.split(','),
+                            help='Comma-separated floats representing the a,c,g,t frequencies, respectively')
+        parser.add_argument('--rates', default=None, type=lambda x: x.split(','),
+                            help='Comma-separated floats representing the rate parameters a,b,c,d,e, respectively')
+        parser.add_argument('--inv-prop', default=None, type=float, help='Invariable sites proportion')
+        parser.add_argument('--gamma-shape', default=None, type=float, help='Gamma distribution shape')
+        parser.add_argument('--gamma-cats', default=None, type=int, help='Number of discrete gamma categories')
         parser.add_argument('--html_path', default=None,
                             help='A path to an html file that will be updated during the run.',
                             type=lambda path: path if os.path.exists(path) else parser.error(f'{path} does not exist!'))
@@ -391,7 +341,8 @@ if __name__ == '__main__':
         else:
             logging.basicConfig(level=logging.INFO)
 
-        main(args.input_msa_path, args.input_tree_path, args.minIR, args.maxIR,
-             args.minAI, args.maxAI, args.output_dir_path, args.html_path)
+        main(args.input_msa_path, args.input_tree_path, args.mode, args.submodel, args.freqs,
+             args.rates, args.inv_prop, args.gamma_shape, args.gamma_cats,
+             args.maxIR, args.output_dir_path, args.html_path)
 
 
