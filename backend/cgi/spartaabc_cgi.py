@@ -265,7 +265,7 @@ def run_cgi():
         if 'SeqType' in form and form['SeqType'].value != '':
             mode = form['SeqType'].value.strip()
 
-        substitution_model = 'nuc'
+        substitution_model = 'JC'
         if 'SubType' in form and form['SubType'].value != '':
             substitution_model = form['SubType'].value.strip().upper()
 
