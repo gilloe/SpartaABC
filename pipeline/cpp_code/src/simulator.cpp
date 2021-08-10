@@ -152,7 +152,7 @@ bool Simulator::simulateAlongTree(tree::nodeP t,
 	return true;
 }
 
-//the Simulator
+//the Simulator - with asher fix for endpoints
 bool Simulator::simualteWithIndelsAlongAspecificBranch_while_creating_events(double branchlength,
 	const vector<Node*>& ancestralsequence, vector<Node*>& output_sequence)
 {
@@ -172,8 +172,11 @@ bool Simulator::simualteWithIndelsAlongAspecificBranch_while_creating_events(dou
 
 	size_t sequence_length = ancestralsequence.size();
 	//running over the branch...
+	size_t next_deletion_size = _fastZDeletions.drawZip(); 
+	// A.M we want to deal with deletions the start before the sequence and "intrude" into the sequence. for that we draw the next deletion size (k) and
+	// adjust the effective sequence length to be s+k-1 where s is the real size
 	double sequenceWiseInsertionRate = 1.0 * _IR * (sequence_length + 1);
-	double sequenceWiseDeletionRate = 1.0 * _DR * sequence_length;
+	double sequenceWiseDeletionRate = 1.0 * _DR * (sequence_length + next_deletion_size - 1);
 	double waitingTime = drawExp(sequenceWiseInsertionRate + sequenceWiseDeletionRate);
 	while (waitingTime < branchlength)
 	{//running through all the events
@@ -251,9 +254,15 @@ bool Simulator::simualteWithIndelsAlongAspecificBranch_while_creating_events(dou
 		}//ending insertion //OI 16.3
 		else
 		{//Flag==FALSE---->> deletion //OI 16.3
-			//initilizing the deletion params ///OI 16.3
-			int deletion_index = uniform(0, sequence_length - 1);
-			size_t deletion_size = _fastZDeletions.drawZip();
+			//initilizing the deletion params ///OI 16.3.20
+			size_t deletion_size = next_deletion_size; // A.M we used the previously drawn deletion size and draw a new one for the next time 8.7.21
+			next_deletion_size = _fastZDeletions.drawZip();
+			int deletion_index = uniform(1 - deletion_size, sequence_length - 1); // A.m changed to allow deletion that start before the sequence
+			if (deletion_index < 0) {
+				// A.M if deletion started before the sequence we adjust it to include only the part that is relevant to the sequence 8.7.21
+				deletion_size += deletion_index;
+				deletion_index = 0;
+			}
 			if (deletion_index + deletion_size > sequence_length)
 			{// extreme cond- when we deletion length passes the length of the sequence //OI 15.3
 				deletion_size = sequence_length - deletion_index;
@@ -353,7 +362,7 @@ bool Simulator::simualteWithIndelsAlongAspecificBranch_while_creating_events(dou
 		//updating branch length and the other parameters. 
 		branchlength = branchlength - waitingTime;
 		sequenceWiseInsertionRate = 1.0 * _IR * (sequence_length + 1);
-		sequenceWiseDeletionRate = 1.0 * _DR * sequence_length;
+		sequenceWiseDeletionRate = 1.0 * _DR * (sequence_length + next_deletion_size - 1); // A.M adjusted for deletions that start before the sequence 8.7.21
 		waitingTime = drawExp(sequenceWiseInsertionRate + sequenceWiseDeletionRate);
 	}
 	//printing temp //OI 29.3

@@ -140,12 +140,13 @@ def pipeline(general_conf,simulations_conf,correction_conf,inference_conf):
 @click.option('--gamma-cats', default=10, help='Specify number of categories to use in the discrete gamma approximation.')
 @click.option('--nsim', default=100000, help='Specify number of simulations performed by SpartaABC.', hidden=DEBUG)
 @click.option('--nburnin', default=10000, help='Specify number of burn in simulations performed by SpartaABC.', hidden=DEBUG)
+@click.option('--regmode', type=click.Choice(['lasso', 'pls']), default='lasso', help='Specify regression type for correction.', hidden=DEBUG)
 def pipeline_click(path,msaf,trf,ver,minr,maxr, bn,
 				   numalign,
 				   skip_s, skip_m, skip_i, skip_bc,
 				   filterp, nonclean, 
 				   mode, submodel, freq, rates, inv_prop, gamma_shape, gamma_cats,
-				   nsim, nburnin):
+				   nsim, nburnin, regmode):
 	# ('not' present because of previous configurations logic)
 	skip_config = {
 		"sparta": not skip_s and  not skip_m and not skip_bc and not skip_i,
@@ -175,7 +176,7 @@ def pipeline_click(path,msaf,trf,ver,minr,maxr, bn,
 
 	general_conf = general_config(pipeline_path, path , trf, msaf, model_list ,skip_config, clean_run, ver ,op_sys)
 	simulations_conf = simulations_config(nsim, nburnin, minr, maxr, numalign)
-	correction_conf = correction_config(submodel_params_, filterp)
+	correction_conf = correction_config(submodel_params_, filterp, regmode)
 	inference_conf = inference_config(lib, bn, size_threshold)
 
 	pipeline(general_conf,simulations_conf,correction_conf,inference_conf)

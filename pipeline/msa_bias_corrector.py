@@ -14,6 +14,8 @@ import pandas as pd
 import numpy as np
 from sklearn import linear_model 
 from sklearn import model_selection
+from sklearn.cross_decomposition import PLSRegression
+
 from scipy.stats import pearsonr
 from tqdm import tqdm
 
@@ -222,13 +224,38 @@ def lasso_reg(X,y):
 							   param_grid = parameters, cv=3,
 							   scoring = 'neg_mean_squared_error')
 	clf.fit(X,y)
-	cv_rmse = np.min(np.sqrt(-clf.cv_results_['mean_test_score']))
+	# cv_rmse = np.min(np.sqrt(-clf.cv_results_['mean_test_score']))
 	
-	res = clf.predict(X)
-	out_stat = (pearsonr(res,y),cv_rmse)
-	return clf,out_stat
+	# res = clf.predict(X)
+	# out_stat = (pearsonr(res,y),cv_rmse)
+	# return clf,out_stat
+	return clf
+
+def pls_reg(X, Y):
+	dummy = np.ones((X.shape[0],X.shape[1]+1))
+	dummy[:,:-1] = X
+	X = dummy
+
+
+	cv = model_selection.RepeatedKFold(n_splits=10, n_repeats=3, random_state=1)
+	mse = []
+	max_num_pls_comps = 20
+
+	for i in np.arange(1, max_num_pls_comps):
+		clf = PLSRegression(n_components=i)
+		score = -1 * model_selection.cross_val_score(clf, X, Y, cv=cv,
+													 scoring='neg_mean_squared_error').mean()
+		mse.append(score)
+	chosen_num_comp = sorted(np.arange(1,max_num_pls_comps), key=lambda t: mse[t-1])[0]
+	clf = PLSRegression(n_components=chosen_num_comp)
+	clf.fit(X, Y)
+	return clf
+	# y_train_hat = clf.predict(x)
+
+	# y_hat = clf.predict(x_to_pred.reshape(1, -1)).flatten()
+
 	
-def correct_mafft_bias(res_path, sim_res_file_path, df_mafft, num_msa,model_type, filter_p, alignment_flag):
+def correct_mafft_bias(res_path, sim_res_file_path, df_mafft, num_msa,model_type, filter_p, reg_mode, alignment_flag):
 
 	df_real, df_meta = load_sim_res_file(sim_res_file_path)
 	sstat_cols = list(df_mafft.columns)[6:]
@@ -252,14 +279,25 @@ def correct_mafft_bias(res_path, sim_res_file_path, df_mafft, num_msa,model_type
 
 	
 	df_trans = df_real.copy()
-	for ind,p in enumerate(sstat_cols):
-		if alignment_flag:
-			y = Y_train[int(num_msa/2):num_msa,ind]
-		else:
-			y = Y_train[:,ind]
-		clf,out_stat = lasso_reg(X_train_reg,y)
-		df_trans[p] = clf.predict(X_full_reg)
-	
+	if reg_mode == "lasso":
+		for ind,p in enumerate(sstat_cols):
+			if alignment_flag:
+				y = Y_train[int(num_msa/2):num_msa,ind]
+			else:
+				y = Y_train[:,ind]
+			# clf,out_stat = lasso_reg(X_train_reg,y)
+			clf = lasso_reg(X_train_reg,y)
+			df_trans[p] = clf.predict(X_full_reg)
+	elif reg_mode == "pls":
+		clf = pls_reg(X_train_reg, Y_train)
+
+		dummy = np.ones((X_full_reg.shape[0],X_full_reg.shape[1]+1))
+		dummy[:,:-1] = X_full_reg
+		X_full_reg = dummy
+
+		res = clf.predict(X_full_reg)
+		for ind,p in enumerate(sstat_cols):
+			df_trans[p] = res[:,ind]
 
 	df_trans_subset = df_trans.iloc[:num_msa,:]
 	min_num_sumstat = filter_p[1]
@@ -401,7 +439,13 @@ def msa_bias_correction(general_conf, correction_conf, model_type="", real_align
 				logging.error("No mafft results found, please provide mafft_sum_stats file")
 				return
 	sim_res_file_path = os.path.join(res_path,f'SpartaABC_data_name_id{model_type}.posterior_params')
-	correct_mafft_bias(res_path,sim_res_file_path,df_mafft, num_msa,model_type,correction_conf.filter_p, alignment_flag=False)
+	correct_mafft_bias(res_path,
+					   sim_res_file_path,
+					   df_mafft, num_msa,
+					   model_type,
+					   correction_conf.filter_p,
+					   correction_conf.regression_mode,
+					   alignment_flag=False)
 	# remove intermediate files.
 	if general_conf.clean_run:
 		remove_large_files(res_path,to_remove=[

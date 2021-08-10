@@ -69,7 +69,7 @@ def get_sparta_config():
 	sparta_config["_outputAlignmnetsFile"] = "results/alignments.fasta"
 
 	sparta_config["_numSimulations"] = "100000"
-	sparta_config["_numBurnIn"] = "10000"
+	sparta_config["_numBurnIn"] = "1"
 
 
 
@@ -100,9 +100,10 @@ class simulations_config:
 
 
 class correction_config:
-	def __init__(self, model_parameters, filter_p):
+	def __init__(self, model_parameters, filter_p, regression_mode):
 		self.model_parameters = model_parameters
 		self.filter_p = filter_p
+		self.regression_mode = regression_mode
 
 
 class inference_config:
@@ -111,7 +112,7 @@ class inference_config:
 		self.number_top = number_top
 		self.size_threshold = size_threshold
 		
-		self.advanced = True # Enable neural network and regression when True.
+		self.advanced = False # Enable neural network and regression when True.
 
 
 if __name__ == "__main__":
